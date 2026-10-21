@@ -4,9 +4,13 @@ Pupil names stay in memory/output files only; nothing here logs them.
 """
 import csv
 import io
+import os
+import pathlib
 import re
 import secrets
-import zipfile
+import shutil
+import subprocess
+import tempfile
 
 import docx
 import pymupdf
@@ -143,27 +147,53 @@ def personalise_docx(src: bytes, name: str, code: str, title: str = "") -> bytes
     return buf.getvalue()
 
 
+def _soffice() -> str:
+    exe = shutil.which("soffice") or shutil.which("libreoffice")
+    for p in ("/Applications/LibreOffice.app/Contents/MacOS/soffice",
+              r"C:\\Program Files\\LibreOffice\\program\\soffice.exe"):
+        if not exe and os.path.exists(p):
+            exe = p
+    if not exe:
+        raise ValueError("DOCX needs LibreOffice installed to make the combined PDF")
+    return exe
+
+
+def docx_to_pdfs(docs: list[bytes]) -> list[bytes]:
+    """Convert DOCX files to PDF with LibreOffice (one batch run), keeping order."""
+    exe = _soffice()
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, data in enumerate(docs):
+            with open(os.path.join(tmp, f"{i}.docx"), "wb") as f:
+                f.write(data)
+        cmd = [exe, f"-env:UserInstallation=file://{pathlib.Path(tmp).as_posix()}/profile",
+               "--headless", "--convert-to", "pdf", "--outdir", tmp] + \
+              [os.path.join(tmp, f"{i}.docx") for i in range(len(docs))]
+        subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+        out = []
+        for i in range(len(docs)):
+            with open(os.path.join(tmp, f"{i}.pdf"), "rb") as f:
+                out.append(f.read())
+    return out
+
+
 def personalise(src: bytes, ext: str, roster: bytes, margin_mm: float = 12,
-                title: str = "", footer_mm: float = 20) -> bytes:
-    """Return a zip: one file per pupil plus codes.csv (code -> name)."""
+                title: str = "", footer_mm: float = 20) -> tuple[bytes, str]:
+    """Return (one PDF with a personalised copy per pupil in roster order,
+    CSV text mapping pupil ID -> name)."""
     ext = ext.lower().lstrip(".")
     if ext not in ("pdf", "docx"):
         raise ValueError("Assignment must be a .pdf or .docx")
     pairs = assign_codes(read_roster(roster))
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        key = io.StringIO()
-        w = csv.writer(key)
-        w.writerow(["pupil_id", "name"])
-        for name, code in pairs:
-            if ext == "pdf":
-                data = personalise_pdf(src, name, code, margin_mm, title, footer_mm)
-            else:
-                data = personalise_docx(src, name, code, title)
-            z.writestr(f"{code}.{ext}", data)
-            w.writerow([code, name])
-        z.writestr("codes.csv", key.getvalue())
-    return buf.getvalue()
+    if ext == "pdf":
+        pdfs = [personalise_pdf(src, n, c, margin_mm, title, footer_mm) for n, c in pairs]
+    else:
+        pdfs = docx_to_pdfs([personalise_docx(src, n, c, title) for n, c in pairs])
+    key = io.StringIO()
+    w = csv.writer(key)
+    w.writerow(["pupil_id", "name"])
+    for name, code in pairs:
+        w.writerow([code, name])
+    return merge_pdfs(pdfs), key.getvalue()
 
 
 def redact_scan(src: bytes, ext: str, band_mm: float = 25, dpi: int = 200) -> bytes:

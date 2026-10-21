@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, send_file, abort
 import io
 import os
+import secrets
 from urllib.parse import quote
 
 from . import core
@@ -18,18 +19,32 @@ def index():
     return render_template("index.html")
 
 
+_mappings: dict[str, str] = {}  # token -> pupil ID/name CSV, held in memory until fetched once
+
+
 @app.post("/personalise")
 def personalise():
     a, r = request.files.get("assignment"), request.files.get("roster")
     if not a or not r:
         abort(400, "Upload an assignment and a class list")
     try:
-        title = os.path.splitext(a.filename or "")[0]
-        z = core.personalise(a.read(), _ext(a), r.read(), float(request.form.get("margin", 12)),
-                             title, float(request.form.get("footer", 20)))
+        pdf, mapping = core.personalise(a.read(), _ext(a), r.read(), float(request.form.get("margin", 12)),
+                                        os.path.splitext(a.filename or "")[0], float(request.form.get("footer", 20)))
     except ValueError as e:
         abort(400, str(e))
-    return send_file(io.BytesIO(z), mimetype="application/zip", as_attachment=True, download_name="personalised.zip")
+    token = secrets.token_urlsafe(16)
+    _mappings[token] = mapping
+    resp = send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name="personalised.pdf")
+    resp.headers["X-Mapping-Token"] = token
+    return resp
+
+
+@app.get("/mapping/<token>")
+def mapping(token):
+    csv_text = _mappings.pop(token, None)
+    if csv_text is None:
+        abort(404)
+    return send_file(io.BytesIO(csv_text.encode()), mimetype="text/csv", as_attachment=True, download_name="pupil_ids.csv")
 
 
 @app.post("/redact")

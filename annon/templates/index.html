@@ -4,12 +4,13 @@
 <style>body{font:16px system-ui;max-width:640px;margin:2rem auto;padding:0 1rem}
 fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{padding:.5rem 1rem}#drop{border:2px dashed #888;border-radius:8px;padding:2rem;text-align:center;cursor:pointer}#drop.over{background:#e8f0fe;border-color:#1a73e8}</style></head>
 <body><h1>Assignment Anonymiser</h1>
-<form method="post" action="/personalise" enctype="multipart/form-data"><fieldset><legend>1. Personalise</legend>
+<form id="personalise" method="post" action="/personalise" enctype="multipart/form-data"><fieldset><legend>1. Personalise</legend>
 <label>Assignment (PDF or DOCX) <input type="file" name="assignment" accept=".pdf,.docx" required></label>
 <label>Class list (CSV with a "name" column) <input type="file" name="roster" accept=".csv" required></label>
 <label>PDF top/bottom margin used (mm) <input type="number" name="margin" value="12" step="1" min="5"></label>
 <label>Existing footer height to clear, PDF only (mm) <input type="number" name="footer" value="20" step="1" min="5"></label>
-<button>Generate zip</button><p>The zip holds one file per pupil plus <code>codes.csv</code> (pupil ID → name). Keep that file private.</p></fieldset></form>
+<button id="pgo">Generate</button> <span id="pstatus"></span>
+<p>You get one PDF with a copy per pupil (in class-list order) and a <code>pupil_ids.csv</code> mapping each pupil ID to a name. Keep the CSV private. DOCX input needs LibreOffice installed.</p></fieldset></form>
 <form id="redact" method="post" action="/redact" enctype="multipart/form-data"><fieldset><legend>2. Anonymise scans</legend>
 <div id="drop" tabindex="0">Drop a class set of scans here (PDF or images), or click to choose
 <input id="scans" type="file" name="scans" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden></div>
@@ -40,5 +41,15 @@ const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a
 const sk=r.headers.get("X-Skipped");files=[];show();
 status.textContent=sk?"Done. Skipped unreadable: "+decodeURIComponent(sk):"Done"}
 catch(err){status.textContent="Failed: "+err}go.disabled=!files.length}
+
+const pf=document.getElementById("personalise"),pgo=document.getElementById("pgo"),pst=document.getElementById("pstatus");
+function save(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click()}
+pf.onsubmit=async e=>{e.preventDefault();pgo.disabled=true;pst.textContent="Working...";
+try{const r=await fetch("/personalise",{method:"POST",body:new FormData(pf)});
+if(!r.ok){pst.textContent="Error: "+(await r.text()).replace(/<[^>]+>/g," ").trim().slice(0,200);return}
+save(await r.blob(),"personalised.pdf");
+const m=await fetch("/mapping/"+r.headers.get("X-Mapping-Token"));save(await m.blob(),"pupil_ids.csv");
+pst.textContent="Done: personalised.pdf and pupil_ids.csv downloaded"}
+catch(err){pst.textContent="Failed: "+err}finally{pgo.disabled=false}}
 </script>
 </body></html>

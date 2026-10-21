@@ -1,5 +1,4 @@
 import io
-import zipfile
 
 import docx
 import pymupdf
@@ -37,35 +36,46 @@ def test_codes_unique_5_digit():
     assert len(set(codes)) == 2000 and all(len(c) == 5 for c in codes)
 
 
-def test_personalise_pdf_header_and_footer():
-    z = zipfile.ZipFile(io.BytesIO(core.personalise(_pdf(), "pdf", ROSTER, title="Systems")))
-    key = dict(l.split(",")[::-1] for l in z.read("codes.csv").decode().split("\r\n")[1:] if l)
-    code = key["Ada Lovelace"]
-    doc = pymupdf.open(stream=z.read(f"{code}.pdf"), filetype="pdf")
-    for page in doc:
-        h = page.rect.height
-        top = page.get_text(clip=pymupdf.Rect(0, 0, page.rect.width, 50))
-        bot = page.get_text(clip=pymupdf.Rect(0, h - 50, page.rect.width, h))
-        assert "Ada Lovelace" in top and code in top
-        assert "OLD FOOTER" not in bot and "Ada" not in bot
-        assert code in bot and "Systems" in bot and f"Page {page.number + 1} of 2" in bot
-        # code left, title centre, page right
-        w = {x[4]: x[0] for x in page.get_text("words", clip=pymupdf.Rect(0, h - 50, page.rect.width, h))}
-        assert w[code] < w["Systems"] < w["Page"]
+def _ids(mapping):
+    return {n: c for c, n in (l.split(",") for l in mapping.strip().splitlines()[1:])}
 
 
-def test_personalise_docx():
-    z = zipfile.ZipFile(io.BytesIO(core.personalise(_docx(), "docx", ROSTER, title="Systems")))
-    key = dict(l.split(",")[::-1] for l in z.read("codes.csv").decode().split("\r\n")[1:] if l)
-    code = key["Alan Turing"]
-    n = f"{code}.docx"
-    assert n in z.namelist()
-    d = docx.Document(io.BytesIO(z.read(n)))
-    s = d.sections[0]
-    assert "Alan Turing" in s.header.paragraphs[-1].text and code in s.header.paragraphs[-1].text
+def test_personalise_pdf_single_file():
+    pdf, mapping = core.personalise(_pdf(), "pdf", ROSTER, title="Systems")
+    ids = _ids(mapping)
+    doc = pymupdf.open(stream=pdf, filetype="pdf")
+    assert len(doc) == 6  # 3 pupils x 2 pages
+    for i, name in enumerate(["Ada Lovelace", "Alan Turing", "Grace Hopper"]):
+        code = ids[name]
+        for j in range(2):
+            page = doc[i * 2 + j]
+            h = page.rect.height
+            top = page.get_text(clip=pymupdf.Rect(0, 0, page.rect.width, 50))
+            bot = page.get_text(clip=pymupdf.Rect(0, h - 50, page.rect.width, h))
+            assert name in top and f"Pupil ID: {code}" in top
+            assert "OLD FOOTER" not in bot and name.split()[0] not in bot
+            assert f"Pupil ID: {code}" in bot and "Systems" in bot and f"Page {j + 1} of 2" in bot
+            w = {x[4]: x[0] for x in page.get_text("words", clip=pymupdf.Rect(0, h - 50, page.rect.width, h))}
+            assert w["Pupil"] < w["Systems"] < w["Page"]
+
+
+def test_personalise_docx_structure():
+    out = core.personalise_docx(_docx(), "Alan Turing", "12345", "Systems")
+    s = docx.Document(io.BytesIO(out)).sections[0]
+    assert "Alan Turing" in s.header.paragraphs[-1].text and "12345" in s.header.paragraphs[-1].text
     ft = s.footer.paragraphs[-1]
-    assert len(s.footer.paragraphs) == 1 and ft.text.startswith(f"Pupil ID: {code}")
+    assert len(s.footer.paragraphs) == 1 and ft.text.startswith("Pupil ID: 12345")
     assert "Systems" in ft.text and "PAGE" in ft._p.xml and "NUMPAGES" in ft._p.xml
+
+
+def test_personalise_docx_single_pdf():
+    pdf, mapping = core.personalise(_docx(), "docx", ROSTER, title="Systems")
+    doc = pymupdf.open(stream=pdf, filetype="pdf")
+    ids = _ids(mapping)
+    assert len(doc) == 3
+    for page, name in zip(doc, ["Ada Lovelace", "Alan Turing", "Grace Hopper"]):
+        text = page.get_text()
+        assert name in text and ids[name] in text and "Page 1 of 1" in text
 
 
 def test_redact_blocks_header_keeps_footer():
@@ -81,7 +91,11 @@ def test_app_endpoints():
     from annon.app import app
     c = app.test_client()
     r = c.post("/personalise", data={"assignment": (io.BytesIO(_pdf()), "a.pdf"), "roster": (io.BytesIO(ROSTER), "r.csv")})
-    assert r.status_code == 200 and r.mimetype == "application/zip"
+    assert r.status_code == 200 and r.mimetype == "application/pdf"
+    assert len(pymupdf.open(stream=r.data, filetype="pdf")) == 6
+    m = c.get("/mapping/" + r.headers["X-Mapping-Token"])
+    assert m.status_code == 200 and m.data.decode().startswith("pupil_id,name")
+    assert c.get("/mapping/" + r.headers["X-Mapping-Token"]).status_code == 404  # one-time
     r = c.post("/redact", data={"scans": (io.BytesIO(_pdf()), "s.pdf")})
     assert r.status_code == 200 and r.mimetype == "application/pdf"
     r = c.post("/redact", data={"scans": [(io.BytesIO(_pdf()), "a.pdf"), (io.BytesIO(_pdf()), "a.pdf"), (io.BytesIO(b"junk"), "bad.pdf")]},
