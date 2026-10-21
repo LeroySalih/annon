@@ -41,7 +41,7 @@ def test_personalise_pdf_header_and_footer():
     z = zipfile.ZipFile(io.BytesIO(core.personalise(_pdf(), "pdf", ROSTER, title="Systems")))
     key = dict(l.split(",")[::-1] for l in z.read("codes.csv").decode().split("\r\n")[1:] if l)
     code = key["Ada Lovelace"]
-    doc = pymupdf.open(stream=z.read(f"Ada_Lovelace_{code}.pdf"), filetype="pdf")
+    doc = pymupdf.open(stream=z.read(f"{code}.pdf"), filetype="pdf")
     for page in doc:
         h = page.rect.height
         top = page.get_text(clip=pymupdf.Rect(0, 0, page.rect.width, 50))
@@ -56,8 +56,10 @@ def test_personalise_pdf_header_and_footer():
 
 def test_personalise_docx():
     z = zipfile.ZipFile(io.BytesIO(core.personalise(_docx(), "docx", ROSTER, title="Systems")))
-    n = [x for x in z.namelist() if x.startswith("Alan")][0]
-    code = n.split("_")[-1][:5]
+    key = dict(l.split(",")[::-1] for l in z.read("codes.csv").decode().split("\r\n")[1:] if l)
+    code = key["Alan Turing"]
+    n = f"{code}.docx"
+    assert n in z.namelist()
     d = docx.Document(io.BytesIO(z.read(n)))
     s = d.sections[0]
     assert "Alan Turing" in s.header.paragraphs[-1].text and code in s.header.paragraphs[-1].text

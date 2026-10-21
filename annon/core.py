@@ -160,7 +160,7 @@ def personalise(src: bytes, ext: str, roster: bytes, margin_mm: float = 12,
                 data = personalise_pdf(src, name, code, margin_mm, title, footer_mm)
             else:
                 data = personalise_docx(src, name, code, title)
-            z.writestr(f"{_safe(name)}_{code}.{ext}", data)
+            z.writestr(f"{code}.{ext}", data)
             w.writerow([code, name])
         z.writestr("codes.csv", key.getvalue())
     return buf.getvalue()
