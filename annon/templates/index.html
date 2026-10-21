@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Assignment Anonymiser</title>
+<style>body{font:16px system-ui;max-width:640px;margin:2rem auto;padding:0 1rem}
+fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{padding:.5rem 1rem}</style></head>
+<body><h1>Assignment Anonymiser</h1>
+<form method="post" action="/personalise" enctype="multipart/form-data"><fieldset><legend>1. Personalise</legend>
+<label>Assignment (PDF or DOCX) <input type="file" name="assignment" accept=".pdf,.docx" required></label>
+<label>Class list (CSV with a "name" column) <input type="file" name="roster" accept=".csv" required></label>
+<label>PDF top/bottom margin used (mm) <input type="number" name="margin" value="12" step="1" min="5"></label>
+<button>Generate zip</button><p>The zip holds one file per pupil plus <code>codes.csv</code> (code → name). Keep that file private.</p></fieldset></form>
+<form method="post" action="/redact" enctype="multipart/form-data"><fieldset><legend>2. Anonymise a scan</legend>
+<label>Scan (PDF or image) <input type="file" name="scan" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" required></label>
+<label>Header height to black out (mm) <input type="number" name="band" value="25" step="1" min="1"></label>
+<button>Black out header</button><p>The footer code stays visible so the paper can be matched back.</p></fieldset></form>
+</body></html>
