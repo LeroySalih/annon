@@ -76,7 +76,7 @@ def personalise_pdf(src: bytes, name: str, code: str, margin_mm: float = 12,
         page.add_redact_annot(pymupdf.Rect(0, r.height - footer_mm * MM, r.width, r.height), fill=(1, 1, 1))
         page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE, graphics=pymupdf.PDF_REDACT_LINE_ART_NONE)
         page.insert_text((pad, y), name, fontsize=11, fontname="helv")
-        label = f"Code: {code}"
+        label = f"Pupil ID: {code}"
         w = pymupdf.get_text_length(label, fontname="helv", fontsize=11)
         page.insert_text((r.width - pad - w, y), label, fontsize=11, fontname="helv")
         fy = r.height - y + 6
@@ -126,7 +126,7 @@ def personalise_docx(src: bytes, name: str, code: str, title: str = "") -> bytes
         width = s.page_width - s.left_margin - s.right_margin
         for h in heads:
             h.is_linked_to_previous = False
-            p = h.add_paragraph(f"{name}\tCode: {code}")
+            p = h.add_paragraph(f"{name}\tPupil ID: {code}")
             p.paragraph_format.tab_stops.add_tab_stop(width, WD_TAB_ALIGNMENT.RIGHT)
         for f in foots:
             f.is_linked_to_previous = False
@@ -134,7 +134,7 @@ def personalise_docx(src: bytes, name: str, code: str, title: str = "") -> bytes
             ts = p.paragraph_format.tab_stops
             ts.add_tab_stop(width // 2, WD_TAB_ALIGNMENT.CENTER)
             ts.add_tab_stop(width, WD_TAB_ALIGNMENT.RIGHT)
-            p.add_run(f"Code: {code}\t{title}\tPage ")
+            p.add_run(f"Pupil ID: {code}\t{title}\tPage ")
             _field(p, "PAGE")
             p.add_run(" of ")
             _field(p, "NUMPAGES")
@@ -154,7 +154,7 @@ def personalise(src: bytes, ext: str, roster: bytes, margin_mm: float = 12,
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         key = io.StringIO()
         w = csv.writer(key)
-        w.writerow(["code", "name"])
+        w.writerow(["pupil_id", "name"])
         for name, code in pairs:
             if ext == "pdf":
                 data = personalise_pdf(src, name, code, margin_mm, title, footer_mm)

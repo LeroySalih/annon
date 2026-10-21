@@ -9,14 +9,14 @@ fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{
 <label>Class list (CSV with a "name" column) <input type="file" name="roster" accept=".csv" required></label>
 <label>PDF top/bottom margin used (mm) <input type="number" name="margin" value="12" step="1" min="5"></label>
 <label>Existing footer height to clear, PDF only (mm) <input type="number" name="footer" value="20" step="1" min="5"></label>
-<button>Generate zip</button><p>The zip holds one file per pupil plus <code>codes.csv</code> (code → name). Keep that file private.</p></fieldset></form>
+<button>Generate zip</button><p>The zip holds one file per pupil plus <code>codes.csv</code> (pupil ID → name). Keep that file private.</p></fieldset></form>
 <form id="redact" method="post" action="/redact" enctype="multipart/form-data"><fieldset><legend>2. Anonymise scans</legend>
 <div id="drop" tabindex="0">Drop a class set of scans here (PDF or images), or click to choose
 <input id="scans" type="file" name="scans" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden></div>
 <ul id="list"></ul>
 <label>Header height to black out (mm) <input type="number" name="band" value="25" step="1" min="1"></label>
 <button id="go" disabled>Black out headers</button> <span id="status"></span>
-<p>All scans are combined, in the order listed, into one PDF. The footer code stays visible so each paper can be matched back.</p></fieldset></form>
+<p>All scans are combined, in the order listed, into one PDF. The footer pupil ID stays visible so each paper can be matched back.</p></fieldset></form>
 <script>
 const drop=document.getElementById("drop"),input=document.getElementById("scans"),list=document.getElementById("list"),
 go=document.getElementById("go"),status=document.getElementById("status"),form=document.getElementById("redact");

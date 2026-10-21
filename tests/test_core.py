@@ -64,7 +64,7 @@ def test_personalise_docx():
     s = d.sections[0]
     assert "Alan Turing" in s.header.paragraphs[-1].text and code in s.header.paragraphs[-1].text
     ft = s.footer.paragraphs[-1]
-    assert len(s.footer.paragraphs) == 1 and ft.text.startswith(f"Code: {code}")
+    assert len(s.footer.paragraphs) == 1 and ft.text.startswith(f"Pupil ID: {code}")
     assert "Systems" in ft.text and "PAGE" in ft._p.xml and "NUMPAGES" in ft._p.xml
 
 
