@@ -1,0 +1,19 @@
+services:
+  annon:
+    build: .
+    image: annon:latest
+    container_name: annon
+    restart: unless-stopped
+    # No ports published: reach it from other containers on dino-app (e.g. a reverse proxy -> http://annon:5055).
+    expose:
+      - "5055"
+    networks:
+      - dino-app
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/app:uid=10001,gid=10001
+
+networks:
+  dino-app:
+    external: true  # created by the dino-app stack; must already exist

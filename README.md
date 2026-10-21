@@ -14,3 +14,8 @@ PDFs need a free margin strip top and bottom (default 12 mm) because the text is
     pytest
 
 Runs locally only; pupil names are never logged or sent anywhere.
+
+## Run as a container
+    docker compose up -d --build
+
+The container joins the existing external `dino-app` network (create it first via the dino-app stack, or `docker network create dino-app`). No host port is published; point your reverse proxy at `http://annon:5055`. The app has **no login**, so only expose it through something that authenticates staff.
