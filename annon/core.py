@@ -63,25 +63,59 @@ def _safe(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_") or "pupil"
 
 
-def personalise_pdf(src: bytes, name: str, code: str, margin_mm: float = 12) -> bytes:
-    """Stamp name+code in the top margin and code in the bottom margin of every page."""
+def personalise_pdf(src: bytes, name: str, code: str, margin_mm: float = 12,
+                    title: str = "", footer_mm: float = 20) -> bytes:
+    """Name+code in the top margin; existing footer text replaced by
+    code (left), title (centre), 'Page X of Y' (right)."""
     doc = pymupdf.open(stream=src, filetype="pdf")
     y = margin_mm * MM / 2 + 3
+    pad = 36
+    total = len(doc)
     for page in doc:
         r = page.rect
-        pad = 36
+        page.add_redact_annot(pymupdf.Rect(0, r.height - footer_mm * MM, r.width, r.height), fill=(1, 1, 1))
+        page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE, graphics=pymupdf.PDF_REDACT_LINE_ART_NONE)
         page.insert_text((pad, y), name, fontsize=11, fontname="helv")
         label = f"Code: {code}"
         w = pymupdf.get_text_length(label, fontname="helv", fontsize=11)
         page.insert_text((r.width - pad - w, y), label, fontsize=11, fontname="helv")
-        fw = pymupdf.get_text_length(label, fontname="helv", fontsize=10)
-        page.insert_text(((r.width - fw) / 2, r.height - y + 6), label, fontsize=10, fontname="helv")
+        fy = r.height - y + 6
+        page.insert_text((pad, fy), label, fontsize=10, fontname="helv")
+        if title:
+            tw = pymupdf.get_text_length(title, fontname="helv", fontsize=10)
+            page.insert_text(((r.width - tw) / 2, fy), title, fontsize=10, fontname="helv")
+        pg = f"Page {page.number + 1} of {total}"
+        pw = pymupdf.get_text_length(pg, fontname="helv", fontsize=10)
+        page.insert_text((r.width - pad - pw, fy), pg, fontsize=10, fontname="helv")
     out = doc.tobytes(garbage=3, deflate=True)
     doc.close()
     return out
 
 
-def personalise_docx(src: bytes, name: str, code: str) -> bytes:
+def _field(par, instr: str):
+    """Append a Word field (e.g. PAGE, NUMPAGES) to a paragraph."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    f = OxmlElement("w:fldSimple")
+    f.set(qn("w:instr"), instr)
+    r = OxmlElement("w:r")
+    t = OxmlElement("w:t")
+    t.text = "1"
+    r.append(t)
+    f.append(r)
+    par._p.append(f)
+
+
+def _clear(part):
+    """Remove all paragraphs/tables from a header/footer, leaving one empty paragraph."""
+    for el in list(part._element):
+        if el.tag.endswith("}p") or el.tag.endswith("}tbl"):
+            part._element.remove(el)
+    return part.add_paragraph()
+
+
+def personalise_docx(src: bytes, name: str, code: str, title: str = "") -> bytes:
+    from docx.enum.text import WD_TAB_ALIGNMENT
     d = docx.Document(io.BytesIO(src))
     for s in d.sections:
         heads = [s.header]
@@ -89,19 +123,28 @@ def personalise_docx(src: bytes, name: str, code: str) -> bytes:
         if s.different_first_page_header_footer:
             heads.append(s.first_page_header)
             foots.append(s.first_page_footer)
+        width = s.page_width - s.left_margin - s.right_margin
         for h in heads:
             h.is_linked_to_previous = False
             p = h.add_paragraph(f"{name}\tCode: {code}")
-            p.paragraph_format.tab_stops.add_tab_stop(s.page_width - s.left_margin - s.right_margin, 2)  # right
+            p.paragraph_format.tab_stops.add_tab_stop(width, WD_TAB_ALIGNMENT.RIGHT)
         for f in foots:
             f.is_linked_to_previous = False
-            f.add_paragraph(f"Code: {code}").alignment = 1  # centre
+            p = _clear(f)
+            ts = p.paragraph_format.tab_stops
+            ts.add_tab_stop(width // 2, WD_TAB_ALIGNMENT.CENTER)
+            ts.add_tab_stop(width, WD_TAB_ALIGNMENT.RIGHT)
+            p.add_run(f"Code: {code}\t{title}\tPage ")
+            _field(p, "PAGE")
+            p.add_run(" of ")
+            _field(p, "NUMPAGES")
     buf = io.BytesIO()
     d.save(buf)
     return buf.getvalue()
 
 
-def personalise(src: bytes, ext: str, roster: bytes, margin_mm: float = 12) -> bytes:
+def personalise(src: bytes, ext: str, roster: bytes, margin_mm: float = 12,
+                title: str = "", footer_mm: float = 20) -> bytes:
     """Return a zip: one file per pupil plus codes.csv (code -> name)."""
     ext = ext.lower().lstrip(".")
     if ext not in ("pdf", "docx"):
@@ -113,7 +156,10 @@ def personalise(src: bytes, ext: str, roster: bytes, margin_mm: float = 12) -> b
         w = csv.writer(key)
         w.writerow(["code", "name"])
         for name, code in pairs:
-            data = personalise_pdf(src, name, code, margin_mm) if ext == "pdf" else personalise_docx(src, name, code)
+            if ext == "pdf":
+                data = personalise_pdf(src, name, code, margin_mm, title, footer_mm)
+            else:
+                data = personalise_docx(src, name, code, title)
             z.writestr(f"{_safe(name)}_{code}.{ext}", data)
             w.writerow([code, name])
         z.writestr("codes.csv", key.getvalue())

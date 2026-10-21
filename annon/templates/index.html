@@ -8,6 +8,7 @@ fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{
 <label>Assignment (PDF or DOCX) <input type="file" name="assignment" accept=".pdf,.docx" required></label>
 <label>Class list (CSV with a "name" column) <input type="file" name="roster" accept=".csv" required></label>
 <label>PDF top/bottom margin used (mm) <input type="number" name="margin" value="12" step="1" min="5"></label>
+<label>Existing footer height to clear, PDF only (mm) <input type="number" name="footer" value="20" step="1" min="5"></label>
 <button>Generate zip</button><p>The zip holds one file per pupil plus <code>codes.csv</code> (code → name). Keep that file private.</p></fieldset></form>
 <form method="post" action="/redact" enctype="multipart/form-data"><fieldset><legend>2. Anonymise a scan</legend>
 <label>Scan (PDF or image) <input type="file" name="scan" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" required></label>

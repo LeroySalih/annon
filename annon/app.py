@@ -23,7 +23,9 @@ def personalise():
     if not a or not r:
         abort(400, "Upload an assignment and a class list")
     try:
-        z = core.personalise(a.read(), _ext(a), r.read(), float(request.form.get("margin", 12)))
+        title = os.path.splitext(a.filename or "")[0]
+        z = core.personalise(a.read(), _ext(a), r.read(), float(request.form.get("margin", 12)),
+                             title, float(request.form.get("footer", 20)))
     except ValueError as e:
         abort(400, str(e))
     return send_file(io.BytesIO(z), mimetype="application/zip", as_attachment=True, download_name="personalised.zip")
