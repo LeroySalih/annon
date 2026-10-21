@@ -154,21 +154,59 @@ def _soffice() -> str:
         if not exe and os.path.exists(p):
             exe = p
     if not exe:
-        raise ValueError("DOCX needs LibreOffice installed to make the combined PDF")
+        raise ValueError("DOCX needs LibreOffice (or Microsoft Word on Windows) to make the combined PDF")
     return exe
 
 
+_WORD_PS = r"""
+$ErrorActionPreference = 'Stop'
+$word = New-Object -ComObject Word.Application
+$word.Visible = $false
+$word.DisplayAlerts = 0
+try {
+  foreach ($f in Get-Content -LiteralPath $args[0]) {
+    $doc = $word.Documents.Open($f, $false, $true)
+    $doc.ExportAsFixedFormat(($f -replace '\.docx$', '.pdf'), 17)
+    $doc.Close($false)
+  }
+} finally { $word.Quit() }
+"""
+
+
+def _word_to_pdfs(tmp: str, n: int) -> None:
+    """Convert tmp/0.docx.. with Microsoft Word (Windows, no admin rights needed)."""
+    listing = os.path.join(tmp, "files.txt")
+    with open(listing, "w", encoding="utf-8") as f:
+        f.write("\n".join(os.path.join(tmp, f"{i}.docx") for i in range(n)))
+    script = os.path.join(tmp, "word.ps1")
+    with open(script, "w", encoding="utf-8") as f:
+        f.write(_WORD_PS)
+    r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, listing],
+                       capture_output=True, text=True, timeout=600)
+    if r.returncode != 0:
+        raise ValueError("Microsoft Word could not convert the DOCX: " + r.stderr.strip()[:300])
+
+
 def docx_to_pdfs(docs: list[bytes]) -> list[bytes]:
-    """Convert DOCX files to PDF with LibreOffice (one batch run), keeping order."""
-    exe = _soffice()
+    """Convert DOCX files to PDF, keeping order. Uses LibreOffice if found,
+    else Microsoft Word on Windows."""
+    try:
+        exe = _soffice()
+    except ValueError:
+        if os.name != "nt":
+            raise
+        exe = None
     with tempfile.TemporaryDirectory() as tmp:
         for i, data in enumerate(docs):
             with open(os.path.join(tmp, f"{i}.docx"), "wb") as f:
                 f.write(data)
-        cmd = [exe, f"-env:UserInstallation=file://{pathlib.Path(tmp).as_posix()}/profile",
-               "--headless", "--convert-to", "pdf", "--outdir", tmp] + \
-              [os.path.join(tmp, f"{i}.docx") for i in range(len(docs))]
-        subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+        if exe:
+            cmd = [exe, f"-env:UserInstallation=file:///{pathlib.Path(tmp).as_posix().lstrip('/')}/profile",
+                   "--headless", "--convert-to", "pdf", "--outdir", tmp] + \
+                  [os.path.join(tmp, f"{i}.docx") for i in range(len(docs))]
+            subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+        else:
+            _word_to_pdfs(tmp, len(docs))
         out = []
         for i in range(len(docs)):
             with open(os.path.join(tmp, f"{i}.pdf"), "rb") as f:

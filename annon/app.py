@@ -69,7 +69,19 @@ def redact():
 
 
 def main():
-    app.run(host="127.0.0.1", port=5055)
+    host = os.environ.get("ANNON_HOST", "127.0.0.1")
+    port = int(os.environ.get("ANNON_PORT", "5055"))
+    url = f"http://127.0.0.1:{port}"
+    if os.environ.get("ANNON_OPEN_BROWSER"):
+        import threading
+        import webbrowser
+        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+    print(f"Assignment Anonymiser running at {url} (close this window to stop)", flush=True)
+    try:
+        from waitress import serve
+        serve(app, host=host, port=port, threads=4)
+    except ImportError:
+        app.run(host=host, port=port)
 
 
 if __name__ == "__main__":

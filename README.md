@@ -19,3 +19,10 @@ Runs locally only; pupil names are never logged or sent anywhere.
     docker compose up -d --build
 
 The container joins the existing external `dino-app` network (create it first via the dino-app stack, or `docker network create dino-app`). No host port is published; point your reverse proxy at `http://annon:5055`. The app has **no login**, so only expose it through something that authenticates staff.
+
+## Portable Windows package (no installer, no admin)
+Build once on any machine with internet (Mac/Linux/Windows):
+
+    python3 packaging/build_windows.py
+
+This writes `dist/annon-windows.zip` (~40 MB: embeddable Python, dependencies and the app). Copy the zip to a Windows PC, unzip it anywhere writable, and double-click `start.bat`. DOCX input uses Microsoft Word (via PowerShell) or LibreOffice if present; PDFs need nothing.
