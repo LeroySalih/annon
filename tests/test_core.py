@@ -82,6 +82,11 @@ def test_app_endpoints():
     c = app.test_client()
     r = c.post("/personalise", data={"assignment": (io.BytesIO(_pdf()), "a.pdf"), "roster": (io.BytesIO(ROSTER), "r.csv")})
     assert r.status_code == 200 and r.mimetype == "application/zip"
-    r = c.post("/redact", data={"scan": (io.BytesIO(_pdf()), "s.pdf")})
-    assert r.status_code == 200
+    r = c.post("/redact", data={"scans": (io.BytesIO(_pdf()), "s.pdf")})
+    assert r.status_code == 200 and r.mimetype == "application/pdf"
+    r = c.post("/redact", data={"scans": [(io.BytesIO(_pdf()), "a.pdf"), (io.BytesIO(_pdf()), "a.pdf"), (io.BytesIO(b"junk"), "bad.pdf")]},
+               content_type="multipart/form-data")
+    assert r.status_code == 200 and r.mimetype == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.data))
+    assert sorted(z.namelist()) == ["a_anon.pdf", "a_anon_2.pdf", "errors.txt"]
     assert c.post("/redact").status_code == 400

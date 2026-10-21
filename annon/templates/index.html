@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Assignment Anonymiser</title>
 <style>body{font:16px system-ui;max-width:640px;margin:2rem auto;padding:0 1rem}
-fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{padding:.5rem 1rem}</style></head>
+fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{padding:.5rem 1rem}#drop{border:2px dashed #888;border-radius:8px;padding:2rem;text-align:center;cursor:pointer}#drop.over{background:#e8f0fe;border-color:#1a73e8}</style></head>
 <body><h1>Assignment Anonymiser</h1>
 <form method="post" action="/personalise" enctype="multipart/form-data"><fieldset><legend>1. Personalise</legend>
 <label>Assignment (PDF or DOCX) <input type="file" name="assignment" accept=".pdf,.docx" required></label>
@@ -10,8 +10,34 @@ fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{
 <label>PDF top/bottom margin used (mm) <input type="number" name="margin" value="12" step="1" min="5"></label>
 <label>Existing footer height to clear, PDF only (mm) <input type="number" name="footer" value="20" step="1" min="5"></label>
 <button>Generate zip</button><p>The zip holds one file per pupil plus <code>codes.csv</code> (code → name). Keep that file private.</p></fieldset></form>
-<form method="post" action="/redact" enctype="multipart/form-data"><fieldset><legend>2. Anonymise a scan</legend>
-<label>Scan (PDF or image) <input type="file" name="scan" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" required></label>
+<form id="redact" method="post" action="/redact" enctype="multipart/form-data"><fieldset><legend>2. Anonymise scans</legend>
+<div id="drop" tabindex="0">Drop a class set of scans here (PDF or images), or click to choose
+<input id="scans" type="file" name="scans" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden></div>
+<ul id="list"></ul>
 <label>Header height to black out (mm) <input type="number" name="band" value="25" step="1" min="1"></label>
-<button>Black out header</button><p>The footer code stays visible so the paper can be matched back.</p></fieldset></form>
+<button id="go" disabled>Black out headers</button> <span id="status"></span>
+<p>One file gives a PDF; several give a zip of PDFs. The footer code stays visible so each paper can be matched back.</p></fieldset></form>
+<script>
+const drop=document.getElementById("drop"),input=document.getElementById("scans"),list=document.getElementById("list"),
+go=document.getElementById("go"),status=document.getElementById("status"),form=document.getElementById("redact");
+let files=[];
+function show(){list.innerHTML="";files.forEach(f=>{const li=document.createElement("li");li.textContent=f.name;list.appendChild(li)});
+go.disabled=!files.length;status.textContent=files.length?files.length+" file(s) ready":""}
+function add(fl){files=files.concat([...fl]);show()}
+drop.onclick=()=>input.click();
+drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" ")input.click()};
+input.onchange=()=>{add(input.files);input.value=""};
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>add(e.dataTransfer.files));
+form.onsubmit=async e=>{e.preventDefault();if(!files.length)return;
+const fd=new FormData();files.forEach(f=>fd.append("scans",f));fd.append("band",form.band.value);
+go.disabled=true;status.textContent="Processing "+files.length+" file(s)...";
+try{const r=await fetch("/redact",{method:"POST",body:fd});
+if(!r.ok){status.textContent="Error: "+(await r.text()).replace(/<[^>]+>/g," ").trim().slice(0,200);go.disabled=false;return}
+const cd=r.headers.get("Content-Disposition")||"",m=/filename="?([^";]+)/.exec(cd);
+const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download=m?m[1]:"anonymised";a.click();
+status.textContent="Done";files=[];show();status.textContent="Done"}
+catch(err){status.textContent="Failed: "+err}go.disabled=!files.length}
+</script>
 </body></html>
