@@ -188,3 +188,14 @@ def redact_scan(src: bytes, ext: str, band_mm: float = 25, dpi: int = 200) -> by
     out.close()
     doc.close()
     return data
+
+
+def merge_pdfs(pdfs: list[bytes]) -> bytes:
+    """Concatenate PDFs, in order, into one."""
+    out = pymupdf.open()
+    for data in pdfs:
+        with pymupdf.open(stream=data, filetype="pdf") as d:
+            out.insert_pdf(d)
+    merged = out.tobytes(garbage=3, deflate=True)
+    out.close()
+    return merged

@@ -86,7 +86,7 @@ def test_app_endpoints():
     assert r.status_code == 200 and r.mimetype == "application/pdf"
     r = c.post("/redact", data={"scans": [(io.BytesIO(_pdf()), "a.pdf"), (io.BytesIO(_pdf()), "a.pdf"), (io.BytesIO(b"junk"), "bad.pdf")]},
                content_type="multipart/form-data")
-    assert r.status_code == 200 and r.mimetype == "application/zip"
-    z = zipfile.ZipFile(io.BytesIO(r.data))
-    assert sorted(z.namelist()) == ["a_anon.pdf", "a_anon_2.pdf", "errors.txt"]
+    assert r.status_code == 200 and r.mimetype == "application/pdf"
+    assert len(pymupdf.open(stream=r.data, filetype="pdf")) == 4  # 2 files x 2 pages
+    assert r.headers["X-Skipped"] == "bad.pdf"
     assert c.post("/redact").status_code == 400

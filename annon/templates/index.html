@@ -16,7 +16,7 @@ fieldset{margin:1.5rem 0;padding:1rem}label{display:block;margin:.6rem 0}button{
 <ul id="list"></ul>
 <label>Header height to black out (mm) <input type="number" name="band" value="25" step="1" min="1"></label>
 <button id="go" disabled>Black out headers</button> <span id="status"></span>
-<p>One file gives a PDF; several give a zip of PDFs. The footer code stays visible so each paper can be matched back.</p></fieldset></form>
+<p>All scans are combined, in the order listed, into one PDF. The footer code stays visible so each paper can be matched back.</p></fieldset></form>
 <script>
 const drop=document.getElementById("drop"),input=document.getElementById("scans"),list=document.getElementById("list"),
 go=document.getElementById("go"),status=document.getElementById("status"),form=document.getElementById("redact");
@@ -37,7 +37,8 @@ try{const r=await fetch("/redact",{method:"POST",body:fd});
 if(!r.ok){status.textContent="Error: "+(await r.text()).replace(/<[^>]+>/g," ").trim().slice(0,200);go.disabled=false;return}
 const cd=r.headers.get("Content-Disposition")||"",m=/filename="?([^";]+)/.exec(cd);
 const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download=m?m[1]:"anonymised";a.click();
-status.textContent="Done";files=[];show();status.textContent="Done"}
+const sk=r.headers.get("X-Skipped");files=[];show();
+status.textContent=sk?"Done. Skipped unreadable: "+decodeURIComponent(sk):"Done"}
 catch(err){status.textContent="Failed: "+err}go.disabled=!files.length}
 </script>
 </body></html>
